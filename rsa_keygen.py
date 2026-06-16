@@ -75,3 +75,64 @@ def _random_prime(bits: int) -> int:
             continue  # would make gcd(3, p-1) == 3, breaking e = 3
         if _is_probable_prime(candidate):
             return candidate
+
+
+def generate_key(bits: int = 2048, e: int = 3) -> dict:
+    """Generate an RSA key dict with fields n, e, d, p, q.
+
+    We split the modulus bit length across two primes of `bits // 2` each. We
+    loop until p != q and the private exponent d exists (it always does once
+    both primes satisfy p % 3 != 1)."""
+    half = bits // 2
+    while True:
+        p = _random_prime(half)
+        q = _random_prime(half)
+        if p == q:
+            continue
+        n = p * q
+        if n.bit_length() != bits:
+            continue  # occasionally the product is 1 bit short; retry
+        phi = (p - 1) * (q - 1)
+        # d is the modular inverse of e modulo phi; pow(e, -1, phi) raises if it
+        # does not exist, which our p % 3 != 1 guard already prevents.
+        d = pow(e, -1, phi)
+        return {"n": n, "e": e, "d": d, "p": p, "q": q, "bits": bits}
+
+
+def sign(message_hash_block: int, key: dict) -> int:
+    """Honest RSA signing primitive: s = block**d mod n.
+
+    Only used by demo.py to show that a *legitimately* produced signature also
+    passes the verifier — a sanity check, NOT part of the attack. Takes an
+    already-encoded integer block so the encoding logic lives in one place."""
+    return pow(message_hash_block, key["d"], key["n"])
+
+
+KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "key.json")
+
+
+def save_key(key: dict, path: str = KEY_PATH) -> None:
+    """Persist the key as JSON (ints stored as decimal strings, since JSON has
+    no big-integer type)."""
+    with open(path, "w") as fh:
+        json.dump({k: str(v) for k, v in key.items()}, fh, indent=2)
+
+
+def load_key(path: str = KEY_PATH) -> dict:
+    """Load a key previously written by save_key."""
+    with open(path) as fh:
+        raw = json.load(fh)
+    return {k: int(v) for k, v in raw.items()}
+
+
+if __name__ == "__main__":
+    print("Generating a 2048-bit RSA key with e = 3 (this can take a few seconds)...")
+    key = generate_key()
+    save_key(key)
+    print(f"Wrote {KEY_PATH}")
+    print(f"  modulus bit length : {key['n'].bit_length()}")
+    print(f"  public exponent e  : {key['e']}")
+    # Self-check: e*d ≡ 1 mod phi, so signing then verifying a token round-trips.
+    token = 0x1234567890ABCDEF
+    assert pow(pow(token, key["d"], key["n"]), key["e"], key["n"]) == token
+    print("  round-trip self-check: OK", file=sys.stderr)
