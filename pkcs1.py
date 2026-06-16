@@ -107,3 +107,38 @@ def icbrt_ceil(n: int) -> int:
     """Smallest integer r with r**3 >= n (ceiling cube root)."""
     r = icbrt(n)
     return r if r ** 3 == n else r + 1
+
+
+# ---------------------------------------------------------------------------
+# Cube root modulo a power of two (the heart of the "suffix" construction)
+# ---------------------------------------------------------------------------
+def cube_root_mod_2k(target: int, k: int) -> int:
+    """
+    Return s in [0, 2**k) such that s**3 ≡ target (mod 2**k).
+
+    Requires *target* to be odd; for odd targets the cube map is a bijection on
+    the units mod 2**k, so the root exists and is unique. We build s one bit at
+    a time (a Hensel-style lift):
+
+      * s = 1 satisfies s**3 ≡ target (mod 2) because target is odd.
+      * Suppose s**3 ≡ target (mod 2**i). Look at bit i. Setting bit i of s adds
+        2**i, and (s + 2**i)**3 = s**3 + 3*s**2*2**i + ...  Since s is odd,
+        3*s**2 is odd, so that cross term flips exactly bit i of the cube (and
+        only touches bits >= i). So if bit i of s**3 disagrees with target, we
+        set bit i of s to fix it, without disturbing the lower i bits.
+
+    Why this is the crucial primitive: flipping a *high* bit of s never changes
+    the *low* bits of s**3. That lets us nail the block's trailing bytes (the
+    DigestInfo+hash "end") using only the low bits of s, leaving the high bits
+    free to shape the block's leading bytes (the "00 01 FF..." start). The
+    uncontrolled bits in between become the garbage middle the broken verifier
+    fails to police.
+    """
+    if target & 1 == 0:
+        raise ValueError("cube_root_mod_2k requires an odd target")
+    s = 1
+    for i in range(1, k):
+        # If bit i of the current cube differs from the target, set bit i of s.
+        if ((s * s * s) ^ target) & (1 << i):
+            s |= (1 << i)
+    return s
