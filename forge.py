@@ -43,29 +43,45 @@ def forge_signature(base_message: bytes, n: int, e: int = 3, *, verbose: bool = 
     if e != 3:
         raise ValueError("this forgery targets the e = 3 case only")
 
-    k = (n.bit_length() + 7) // 8
+    k = (n.bit_length() + 7) // 8          # largeur du bloc en octets (256 pour 2048 bits)
     message, suffix = _ensure_odd_hash_message(base_message)
-    suffix_bits = len(suffix) * 8
+    suffix_bits = len(suffix) * 8          # nombre de bits bas de s**3 que l'on impose
 
-    # Ancrage 1 — fixer la FIN : les bits bas de s donnent s**3 finissant par DigestInfo||HASH.
+    # --- Ancrage 1 : fixer la FIN du bloc (le suffixe DigestInfo||HASH) ----------------
+    # On veut que les octets de poids faible de s**3 soient exactement DigestInfo||HASH,
+    # c.-à-d. s**3 ≡ suffixe (mod 2**suffix_bits). cube_root_mod_2k résout cette congruence
+    # et renvoie s_low. Conséquence clé : s**3 mod 2**suffix_bits ne dépend QUE de
+    # s mod 2**suffix_bits, donc tant que les bits bas de s valent s_low, la FIN est correcte —
+    # quels que soient les bits hauts. On garde ainsi toute liberté sur le DÉBUT (ancrage 2).
     s_low = cube_root_mod_2k(os2ip(suffix), suffix_bits)
 
-    # Ancrage 2 — fixer le DÉBUT : s**3 dans [lo_block, hi_block) a ces octets de tête.
-    # Le séparateur 00 est inclus pour que la regex de broken_verify matche tout milieu.
+    # --- Ancrage 2 : fixer le DÉBUT du bloc (le préfixe 00 01 FF..FF 00) ---------------
+    # On choisit les octets de tête imposés et on les place en haut d'un bloc de k octets.
+    # Tout entier dans [lo_block, hi_block) a EXACTEMENT ces octets de tête : lo_block est
+    # ce préfixe suivi de zéros, hi_block le préfixe incrémenté de 1 (donc on couvre toutes
+    # les valeurs des octets bas en gardant le préfixe figé). On inclut le séparateur 00
+    # dans le préfixe pour que la regex ^00 01 FF+ 00 de broken_verify matche, peu importe
+    # le « garbage » qui suit.
     prefix = b"\x00\x01" + (b"\xff" * MIN_FF_PADDING) + b"\x00"
     shift_bits = (k - len(prefix)) * 8
     lo_block = os2ip(prefix) << shift_bits
     hi_block = (os2ip(prefix) + 1) << shift_bits
 
-    # Plus petit s >= icbrt_ceil(lo_block) qui conserve les bits du suffixe (≡ s_low).
-    # Ajouter des multiples de 2**suffix_bits préserve l'ancrage 1 tout en atteignant
-    # l'intervalle du préfixe ; l'intervalle est bien plus large que le pas, donc ça tombe.
+    # --- Recollage des deux ancrages (style restes chinois sur les puissances de 2) ----
+    # Il faut un s tel que s**3 ∈ [lo_block, hi_block) (DÉBUT) ET s ≡ s_low (mod 2**suffix_bits)
+    # (FIN). On part du plus petit s dont le cube atteint l'intervalle, icbrt_ceil(lo_block),
+    # puis on le « recale » sur la bonne classe de congruence modulo 2**suffix_bits. Ajouter
+    # des multiples de ce module ne change jamais les bits bas (FIN préservée) et fait monter
+    # s pour entrer dans l'intervalle du préfixe. Comme cet intervalle (~2**600 en s) est très
+    # large devant le pas (2**408), un s valide existe toujours et est trouvé en quelques pas.
     modulus = 1 << suffix_bits
     s_min = icbrt_ceil(lo_block)
-    s = s_min + ((s_low - s_min) % modulus)
-    while s ** 3 < lo_block:
+    s = s_min + ((s_low - s_min) % modulus)   # plus petit s >= s_min avec s ≡ s_low (mod modulus)
+    while s ** 3 < lo_block:                   # le recalage a pu nous laisser juste sous l'intervalle
         s += modulus
     if s ** 3 >= hi_block:
+        # Impossible avec ce dimensionnement (intervalle ≫ pas) ; on échoue franchement
+        # plutôt que de renvoyer une forge invalide.
         raise RuntimeError("prefix interval too narrow for suffix step (unexpected sizing)")
 
     if verbose:

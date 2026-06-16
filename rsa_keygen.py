@@ -25,11 +25,14 @@ def _is_probable_prime(n: int, rounds: int = 40) -> bool:
             return True
         if n % p == 0:
             return False
+    # Écrit n - 1 = d * 2**r avec d impair (forme requise par le test).
     r, d = 0, n - 1
     while d % 2 == 0:
         r += 1
         d //= 2
     for _ in range(rounds):
+        # Témoin aléatoire a dans [2, n-2] ; a^d doit valoir 1 ou -1, sinon l'un de
+        # ses carrés successifs a^(d·2^j) doit atteindre -1 (mod n) pour un premier.
         a = 2 + int.from_bytes(os.urandom((n.bit_length() + 7) // 8), "big") % (n - 3)
         x = pow(a, d, n)
         if x == 1 or x == n - 1:
@@ -39,6 +42,8 @@ def _is_probable_prime(n: int, rounds: int = 40) -> bool:
             if x == n - 1:
                 break
         else:
+            # Le for s'est terminé sans break : aucun carré n'a donné -1 -> a est un
+            # témoin de Rabin, n est composé. (clause else d'un for : exécutée si pas de break)
             return False
     return True
 
