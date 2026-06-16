@@ -1,0 +1,9 @@
+# Generated RSA key for the exercise (recreate with: python3 rsa_keygen.py)
+key.json
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Windows / WSL alternate-data-stream metadata
+*:Zone.Identifier
