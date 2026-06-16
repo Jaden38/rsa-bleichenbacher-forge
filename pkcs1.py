@@ -71,3 +71,39 @@ def i2osp(x: int, length: int) -> bytes:
 def os2ip(octets: bytes) -> int:
     """Octet-String-to-Integer: interpret bytes as a big-endian integer."""
     return int.from_bytes(octets, "big")
+
+
+# ---------------------------------------------------------------------------
+# Exact integer cube root (floor), no floats
+# ---------------------------------------------------------------------------
+def icbrt(n: int) -> int:
+    """
+    Return floor(n ** (1/3)) for n >= 0, computed exactly with binary search.
+
+    Used by the forger to turn a *desired* top-of-block value into a base `s`
+    whose cube `s**3` lands in the wanted range. Newton's method would also
+    work, but binary search is trivially correct and easy to audit: we keep an
+    invariant lo**3 <= n and converge on the largest such integer.
+    """
+    if n < 0:
+        raise ValueError("icbrt is defined for non-negative integers only")
+    if n < 2:
+        return n
+    # Establish an upper bound hi with hi**3 > n by doubling.
+    lo, hi = 0, 1
+    while hi ** 3 <= n:
+        hi <<= 1
+    # Binary search for the floor cube root in [lo, hi).
+    while hi - lo > 1:
+        mid = (lo + hi) // 2
+        if mid ** 3 <= n:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+def icbrt_ceil(n: int) -> int:
+    """Smallest integer r with r**3 >= n (ceiling cube root)."""
+    r = icbrt(n)
+    return r if r ** 3 == n else r + 1
