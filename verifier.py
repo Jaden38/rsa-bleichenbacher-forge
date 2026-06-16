@@ -71,3 +71,33 @@ def broken_verify(message: bytes, signature: int, n: int, e: int) -> bool:
     #    right up to the suffix -- i.e. that block == 00 01 FF...FF 00 suffix
     #    with NO gap. This verifier skips that, accepting any garbage middle.
     return True
+
+
+def strict_verify(message: bytes, signature: int, n: int, e: int) -> bool:
+    """A CORRECT PKCS#1 v1.5 verifier, included for comparison / the report.
+
+    It reconstructs the one and only valid block and compares byte-for-byte, so
+    the garbage-in-the-middle forgery is rejected. This is the recommended fix
+    (alongside migrating to RSASSA-PSS)."""
+    k = (n.bit_length() + 7) // 8
+    m = pow(signature, e, n)
+    block = i2osp(m, k)
+
+    suffix = digest_info_suffix(message)
+    # The padding string fills everything between the 00 01 prefix/00 separator
+    # and the suffix. Rebuild the unique expected block and compare exactly.
+    ff_len = k - 3 - len(suffix)  # bytes available for the FF padding string
+    if ff_len < MIN_FF_PADDING:
+        return False  # message hash too large for the modulus (won't happen here)
+    expected = b"\x00\x01" + (b"\xff" * ff_len) + b"\x00" + suffix
+    # Constant-structure comparison: there is exactly one valid encoding.
+    return block == expected
+
+
+if __name__ == "__main__":
+    # Smoke test: a random integer should fail both verifiers.
+    from rsa_keygen import load_key
+
+    key = load_key()
+    print("random signature, broken_verify:", broken_verify(b"hello", 42, key["n"], key["e"]))
+    print("random signature, strict_verify:", strict_verify(b"hello", 42, key["n"], key["e"]))
