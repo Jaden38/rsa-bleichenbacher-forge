@@ -1,17 +1,17 @@
-"""Programme A: the deliberately broken PKCS#1 v1.5 verifier (plus a strict one).
+"""Programme A : le vérificateur PKCS#1 v1.5 volontairement défectueux (+ un strict).
 
-The flaw: instead of rebuilding the unique expected block and comparing it
-byte-for-byte, broken_verify only checks that the START and the END look right
-and never checks that the FF padding runs all the way to the DigestInfo. The
-bytes in between are unchecked — exactly the gap the forge exploits.
+La faille : au lieu de reconstruire l'unique bloc attendu et de le comparer
+octet par octet, broken_verify vérifie seulement que le DÉBUT et la FIN ont l'air
+corrects, sans jamais contrôler que le bourrage FF descend jusqu'au DigestInfo.
+Les octets entre les deux ne sont pas contrôlés — exactement la brèche exploitée.
 """
 
 import re
 
 from pkcs1 import MIN_FF_PADDING, digest_info_suffix, i2osp
 
-# Start landmark: 00 01, >= 8 bytes of FF, then a 00 separator. Anchored at
-# offset 0, but does NOT require the padding to reach the DigestInfo.
+# Balise de début : 00 01, >= 8 octets FF, puis un séparateur 00. Ancrée à
+# l'offset 0, mais n'exige PAS que le bourrage atteigne le DigestInfo.
 _START_RE = re.compile(rb"\x00\x01\xff{%d,}\x00" % MIN_FF_PADDING)
 
 
@@ -21,12 +21,12 @@ def broken_verify(message: bytes, signature: int, n: int, e: int) -> bool:
 
     if not _START_RE.match(block):
         return False
-    # END check only; the middle between separator and suffix is never inspected.
+    # Contrôle de FIN seulement ; le milieu entre séparateur et suffixe est ignoré.
     return block.endswith(digest_info_suffix(message))
 
 
 def strict_verify(message: bytes, signature: int, n: int, e: int) -> bool:
-    """Correct verifier: rebuild the one valid block and compare exactly."""
+    """Vérificateur correct : reconstruit l'unique bloc valide et compare exactement."""
     k = (n.bit_length() + 7) // 8
     block = i2osp(pow(signature, e, n), k)
 

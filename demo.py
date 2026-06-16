@@ -1,5 +1,5 @@
-"""End-to-end PoC: an honest signature passes both verifiers; a forged one (built
-from the public key alone) passes the broken verifier but fails the strict one.
+"""PoC de bout en bout : une signature honnête passe les deux vérificateurs ; une
+forgée (à partir de la seule clé publique) passe le défectueux mais échoue au strict.
 """
 
 import os
@@ -11,7 +11,7 @@ from verifier import broken_verify, strict_verify
 
 
 def _honest_signature(message: bytes, key: dict) -> int:
-    """Legitimate PKCS#1 v1.5 signature (the only use of the private key)."""
+    """Signature PKCS#1 v1.5 légitime (seul usage de la clé privée)."""
     k = (key["n"].bit_length() + 7) // 8
     suffix = digest_info_suffix(message)
     block = b"\x00\x01" + (b"\xff" * (k - 3 - len(suffix))) + b"\x00" + suffix

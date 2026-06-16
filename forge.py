@@ -1,17 +1,18 @@
-"""Programme B: Bleichenbacher's e = 3 signature forgery (public key only).
+"""Programme B : la forge de signature de Bleichenbacher pour e = 3 (clé publique seule).
 
-We build a perfect cube s**3 whose 256-byte encoding is
+On construit un cube parfait s**3 dont l'encodage sur 256 octets vaut
 
     00 01 FF..FF 00 [ garbage ] 00 DigestInfo HASH
 
-i.e. a valid-looking START and END with anything in between. Two independent
-anchors, exploiting that the low bits of s**3 depend only on the low bits of s:
+c'est-à-dire un DÉBUT et une FIN d'apparence valide, avec n'importe quoi entre
+les deux. Deux ancrages indépendants, exploitant que les bits bas de s**3 ne
+dépendent que des bits bas de s :
 
-  * suffix (END): low bits of s, via cube_root_mod_2k, pin DigestInfo||HASH.
-  * prefix (START): high bits of s, via icbrt, place 00 01 FF..FF 00 at the top.
+  * suffixe (FIN) : les bits bas de s, via cube_root_mod_2k, fixent DigestInfo||HASH.
+  * préfixe (DÉBUT) : les bits hauts de s, via icbrt, placent 00 01 FF..FF 00 en tête.
 
-The prefix interval (~2^600 wide) dwarfs the suffix step (2^408), so a single s
-satisfies both. s**3 stays well below n, so s**3 mod n == s**3.
+L'intervalle du préfixe (~2^600 de large) écrase le pas du suffixe (2^408), donc
+un seul s satisfait les deux. s**3 reste bien sous n, donc s**3 mod n == s**3.
 """
 
 from pkcs1 import (
@@ -25,8 +26,8 @@ from pkcs1 import (
 
 
 def _ensure_odd_hash_message(base_message: bytes):
-    """Pick a message whose hash ends in an odd byte (cube_root_mod_2k needs an
-    odd target). The attacker chooses the message, so we append a counter."""
+    """Choisit un message dont l'empreinte finit par un octet impair (cube_root_mod_2k
+    exige une cible impaire). L'attaquant choisit le message : on ajoute un compteur."""
     counter = 0
     while True:
         message = base_message if counter == 0 else base_message + b":" + str(counter).encode()
@@ -37,8 +38,8 @@ def _ensure_odd_hash_message(base_message: bytes):
 
 
 def forge_signature(base_message: bytes, n: int, e: int = 3, *, verbose: bool = False):
-    """Forge a signature accepted by broken_verify. Returns (message, signature),
-    where message may carry an appended counter (see _ensure_odd_hash_message)."""
+    """Forge une signature acceptée par broken_verify. Renvoie (message, signature),
+    où message peut porter un compteur ajouté (cf. _ensure_odd_hash_message)."""
     if e != 3:
         raise ValueError("this forgery targets the e = 3 case only")
 
@@ -46,19 +47,19 @@ def forge_signature(base_message: bytes, n: int, e: int = 3, *, verbose: bool = 
     message, suffix = _ensure_odd_hash_message(base_message)
     suffix_bits = len(suffix) * 8
 
-    # Anchor 1 — pin the END: low bits of s give s**3 ending in DigestInfo||HASH.
+    # Ancrage 1 — fixer la FIN : les bits bas de s donnent s**3 finissant par DigestInfo||HASH.
     s_low = cube_root_mod_2k(os2ip(suffix), suffix_bits)
 
-    # Anchor 2 — pin the START: s**3 in [lo_block, hi_block) has these top bytes.
-    # The 00 separator is baked in so broken_verify's regex matches any middle.
+    # Ancrage 2 — fixer le DÉBUT : s**3 dans [lo_block, hi_block) a ces octets de tête.
+    # Le séparateur 00 est inclus pour que la regex de broken_verify matche tout milieu.
     prefix = b"\x00\x01" + (b"\xff" * MIN_FF_PADDING) + b"\x00"
     shift_bits = (k - len(prefix)) * 8
     lo_block = os2ip(prefix) << shift_bits
     hi_block = (os2ip(prefix) + 1) << shift_bits
 
-    # Smallest s >= icbrt_ceil(lo_block) that keeps the suffix bits (≡ s_low).
-    # Adding multiples of 2**suffix_bits preserves anchor 1 while reaching the
-    # prefix interval; the interval is far wider than the step, so this lands.
+    # Plus petit s >= icbrt_ceil(lo_block) qui conserve les bits du suffixe (≡ s_low).
+    # Ajouter des multiples de 2**suffix_bits préserve l'ancrage 1 tout en atteignant
+    # l'intervalle du préfixe ; l'intervalle est bien plus large que le pas, donc ça tombe.
     modulus = 1 << suffix_bits
     s_min = icbrt_ceil(lo_block)
     s = s_min + ((s_low - s_min) % modulus)

@@ -1,4 +1,4 @@
-"""Self-contained sanity tests (no pytest). Run: python3 test_forge.py"""
+"""Tests de bon fonctionnement autonomes (sans pytest). Lancer : python3 test_forge.py"""
 
 import os
 
@@ -22,7 +22,7 @@ def test_cube_root_mod_2k():
         s = cube_root_mod_2k(t, k)
         assert (s ** 3) % (1 << k) == t % (1 << k), t
     try:
-        cube_root_mod_2k(4, 16)  # even target must raise
+        cube_root_mod_2k(4, 16)  # une cible paire doit lever une exception
     except ValueError:
         pass
     else:

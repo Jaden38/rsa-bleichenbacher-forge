@@ -1,14 +1,14 @@
-"""Generate a 2048-bit RSA key with e = 3, standard library only.
+"""Génère une clé RSA 2048 bits avec e = 3, bibliothèque standard uniquement.
 
-This is the only place a private key exists; the forge never touches it.
-Run directly to (re)generate key.json.
+C'est le seul endroit où une clé privée existe ; la forge n'y touche jamais.
+Exécuter directement pour (re)générer key.json.
 """
 
 import json
 import os
 import sys
 
-# Small primes for cheap trial division before Miller-Rabin.
+# Petits premiers pour une division d'essai bon marché avant Miller-Rabin.
 _SMALL_PRIMES = [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71,
     73, 79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151,
@@ -17,7 +17,7 @@ _SMALL_PRIMES = [
 
 
 def _is_probable_prime(n: int, rounds: int = 40) -> bool:
-    """Miller-Rabin; 40 rounds gives a false-positive rate below 4**-40."""
+    """Miller-Rabin ; 40 tours donnent un taux de faux positif sous 4**-40."""
     if n < 2:
         return False
     for p in _SMALL_PRIMES:
@@ -46,8 +46,8 @@ def _is_probable_prime(n: int, rounds: int = 40) -> bool:
 def _random_prime(bits: int) -> int:
     while True:
         candidate = int.from_bytes(os.urandom((bits + 7) // 8), "big")
-        candidate |= (1 << (bits - 1)) | 1  # force full length and oddness
-        # Reject p ≡ 1 (mod 3): it would make gcd(3, p-1) = 3 and break e = 3.
+        candidate |= (1 << (bits - 1)) | 1  # force la longueur pleine et l'imparité
+        # Rejette p ≡ 1 (mod 3) : cela rendrait gcd(3, p-1) = 3 et casserait e = 3.
         if candidate % 3 == 1:
             continue
         if _is_probable_prime(candidate):
@@ -69,7 +69,7 @@ def generate_key(bits: int = 2048, e: int = 3) -> dict:
 
 
 def sign(message_hash_block: int, key: dict) -> int:
-    """Honest signing primitive (demo sanity check only, not the attack)."""
+    """Primitive de signature honnête (sanity check de la démo, pas l'attaque)."""
     return pow(message_hash_block, key["d"], key["n"])
 
 
@@ -77,7 +77,7 @@ KEY_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "key.json")
 
 
 def save_key(key: dict, path: str = KEY_PATH) -> None:
-    # JSON has no big-int type, so store the integers as decimal strings.
+    # JSON n'a pas de type grand entier : on stocke les entiers en chaînes décimales.
     with open(path, "w") as fh:
         json.dump({k: str(v) for k, v in key.items()}, fh, indent=2)
 
