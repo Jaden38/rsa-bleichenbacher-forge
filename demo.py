@@ -1,36 +1,20 @@
-"""
-demo.py — End-to-end proof of concept tying Programmes A and B together.
-
-Pipeline:
-    1. Load (or generate) a 2048-bit RSA key with e = 3.
-    2. Show that an HONEST signature (made WITH the private key) passes both the
-       broken and the strict verifier -- the verifier isn't trivially broken.
-    3. FORGE a signature for an attacker-chosen message using ONLY the public
-       key, then show it passes the broken verifier (the attack succeeds) but is
-       rejected by the strict verifier (the fix works).
-
-Run:
-    python3 demo.py
+"""End-to-end PoC: an honest signature passes both verifiers; a forged one (built
+from the public key alone) passes the broken verifier but fails the strict one.
 """
 
 import os
 
 from forge import forge_signature
-from pkcs1 import MIN_FF_PADDING, digest_info_suffix, os2ip
+from pkcs1 import digest_info_suffix, os2ip
 from rsa_keygen import KEY_PATH, generate_key, load_key, save_key, sign
 from verifier import broken_verify, strict_verify
 
 
 def _honest_signature(message: bytes, key: dict) -> int:
-    """Produce a legitimate PKCS#1 v1.5 signature using the PRIVATE key.
-
-    This is the only place the private key is used, and only to prove the
-    verifier accepts genuine signatures. It builds the one correct block
-    (00 01 FF...FF 00 DigestInfo HASH) and raises it to the private exponent."""
+    """Legitimate PKCS#1 v1.5 signature (the only use of the private key)."""
     k = (key["n"].bit_length() + 7) // 8
     suffix = digest_info_suffix(message)
-    ff_len = k - 3 - len(suffix)
-    block = b"\x00\x01" + (b"\xff" * ff_len) + b"\x00" + suffix
+    block = b"\x00\x01" + (b"\xff" * (k - 3 - len(suffix))) + b"\x00" + suffix
     return sign(os2ip(block), key)
 
 
@@ -39,7 +23,6 @@ def _row(label: str, value: bool) -> str:
 
 
 def main() -> None:
-    # --- 1. key -------------------------------------------------------------
     if os.path.exists(KEY_PATH):
         key = load_key()
         print(f"Loaded existing key from {KEY_PATH}")
@@ -50,7 +33,6 @@ def main() -> None:
     n, e = key["n"], key["e"]
     print(f"  modulus bits = {n.bit_length()}, e = {e}\n")
 
-    # --- 2. honest signature passes both verifiers --------------------------
     honest_msg = b"This message was signed by the legitimate key holder."
     honest_sig = _honest_signature(honest_msg, key)
     print("Honest signature (made WITH the private key):")
@@ -58,7 +40,6 @@ def main() -> None:
     print(_row("strict verifier", strict_verify(honest_msg, honest_sig, n, e)))
     print()
 
-    # --- 3. forge without the private key -----------------------------------
     target = b"TRANSFER 1000000 EUR TO mallory@evil.example"
     print(f"Forging a signature for attacker message:\n  {target!r}")
     print("  (using ONLY the public key n, e -- no private key)\n")
@@ -74,7 +55,6 @@ def main() -> None:
     print(_row("strict verifier (fixed)", strict_ok))
     print()
 
-    # --- verdict ------------------------------------------------------------
     if broken_ok and not strict_ok:
         print("RESULT: forgery ACCEPTED by the broken verifier and REJECTED by the")
         print("        strict one -- Bleichenbacher's attack reproduced successfully.")

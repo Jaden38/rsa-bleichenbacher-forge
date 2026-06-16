@@ -1,22 +1,14 @@
-"""
-test_forge.py — Self-contained sanity tests (no pytest needed).
-
-Run:  python3 test_forge.py
-Exits non-zero on any failure. These guard the maths primitives and the
-end-to-end attack so a refactor that silently breaks the forge is caught.
-"""
+"""Self-contained sanity tests (no pytest). Run: python3 test_forge.py"""
 
 import os
 
 from forge import forge_signature
-from pkcs1 import cube_root_mod_2k, digest_info_suffix, icbrt, icbrt_ceil
+from pkcs1 import cube_root_mod_2k, digest_info_suffix, icbrt, icbrt_ceil, os2ip
 from rsa_keygen import KEY_PATH, generate_key, load_key, save_key, sign
 from verifier import broken_verify, strict_verify
-from pkcs1 import os2ip
 
 
 def test_icbrt():
-    # Exact cubes and their neighbours round correctly.
     for x in [0, 1, 7, 8, 9, 26, 27, 28, 10**30]:
         r = icbrt(x)
         assert r ** 3 <= x < (r + 1) ** 3, x
@@ -25,13 +17,12 @@ def test_icbrt():
 
 
 def test_cube_root_mod_2k():
-    # Reconstruct several odd targets; even targets must be rejected.
     for t in [1, 3, 0x12345, (1 << 200) | 1]:
         k = max(8, t.bit_length() + 1)
         s = cube_root_mod_2k(t, k)
         assert (s ** 3) % (1 << k) == t % (1 << k), t
     try:
-        cube_root_mod_2k(4, 16)
+        cube_root_mod_2k(4, 16)  # even target must raise
     except ValueError:
         pass
     else:
@@ -49,15 +40,10 @@ def _key():
 def test_forge_end_to_end():
     key = _key()
     n, e = key["n"], key["e"]
-    msg = b"forge me please"
-    fmsg, sig = forge_signature(msg, n, e)
-    # The attack succeeds against the broken verifier...
+    fmsg, sig = forge_signature(b"forge me please", n, e)
     assert broken_verify(fmsg, sig, n, e), "broken verifier must accept the forgery"
-    # ...and the fix (strict verifier) defeats it.
     assert not strict_verify(fmsg, sig, n, e), "strict verifier must reject the forgery"
-    # No private-key wrap-around: s**3 < n, so the block is a real cube.
     assert sig ** 3 < n, "s**3 must stay below the modulus for e=3 forgery"
-    # The forged block really ends in DigestInfo||HASH of the signed message.
     block = (sig ** 3).to_bytes((n.bit_length() + 7) // 8, "big")
     assert block.endswith(digest_info_suffix(fmsg))
 
